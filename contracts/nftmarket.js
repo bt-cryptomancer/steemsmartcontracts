@@ -75,7 +75,6 @@ actions.enableMarket = async (payload) => {
     if (api.assert(nft !== null, 'symbol does not exist')
       && api.assert(nft.issuer === api.sender, 'must be the issuer')) {
       // create a new table to hold market orders for this NFT
-      // eslint-disable-next-line prefer-template
       const marketTableName = symbol + 'sellBook';
       const metricsTableName = symbol + 'openInterest';
       const historyTableName = symbol + 'tradesHistory';
@@ -86,6 +85,33 @@ actions.enableMarket = async (payload) => {
         await api.db.createTable(historyTableName, ['priceSymbol', 'timestamp']);
 
         api.emit('enableMarket', { symbol });
+      }
+    }
+  }
+};
+
+actions.enableBids = async (payload) => {
+  const {
+    symbol,
+    isSignedWithActiveKey,
+  } = payload;
+
+  if (api.assert(isSignedWithActiveKey === true, 'you must use a custom_json signed with your active key')
+    && api.assert(symbol && typeof symbol === 'string', 'invalid params')) {
+    // make sure NFT exists and verify ownership
+    const nft = await api.db.findOneInTable('nft', 'nfts', { symbol });
+    if (api.assert(nft !== null, 'symbol does not exist')
+      && api.assert(nft.issuer === api.sender, 'must be the issuer')) {
+      // create a new table to hold buy side market orders for this NFT
+      const buyTableName = symbol + 'buyBook';
+      const sellTableName = symbol + 'sellBook';
+      const sellTableExists = await api.db.tableExists(sellTableName);
+      const buyTableExists = await api.db.tableExists(buyTableName);
+      if (api.assert(sellTableExists === true, 'market must be enabled first')
+        && api.assert(buyTableExists === false, 'bids already enabled')) {
+        await api.db.createTable(buyTableName, ['ownedBy', 'account', 'grouping', 'priceSymbol']);
+
+        api.emit('enableBids', { symbol });
       }
     }
   }

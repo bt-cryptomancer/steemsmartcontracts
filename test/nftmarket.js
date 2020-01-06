@@ -196,6 +196,7 @@ describe('nftmarket', function() {
       transactions.push(new Transaction(38145386, 'TXID1234', 'steemsc', 'tokens', 'transfer', `{ "symbol":"${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "to":"cryptomancer", "quantity":"200", "isSignedWithActiveKey":true }`));
       transactions.push(new Transaction(38145386, 'TXID1235', 'cryptomancer', 'nft', 'create', '{ "isSignedWithActiveKey": true, "name":"test NFT", "symbol":"TEST", "url":"http://mynft.com" }'));
       transactions.push(new Transaction(38145386, 'TXID1236', 'cryptomancer', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145386, 'TXID1237', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
 
       let block = {
         refSteemBlockNumber: 38145386,
@@ -233,6 +234,14 @@ describe('nftmarket', function() {
       exists = await database1.tableExists({
         contract: 'nftmarket',
         table: 'TESTtradesHistory'
+      });
+
+      console.log(exists);
+      assert.equal(exists, true);
+
+      exists = await database1.tableExists({
+        contract: 'nftmarket',
+        table: 'TESTbuyBook'
       });
 
       console.log(exists);
@@ -265,6 +274,7 @@ describe('nftmarket', function() {
       transactions.push(new Transaction(38145386, 'TXID1237', 'cryptomancer', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "badparam": "error" }'));
       transactions.push(new Transaction(38145386, 'TXID1238', 'cryptomancer', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "symbol": "INVALID" }'));
       transactions.push(new Transaction(38145386, 'TXID1239', 'aggroed', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145386, 'TXID1240', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
 
       let block = {
         refSteemBlockNumber: 38145386,
@@ -284,11 +294,13 @@ describe('nftmarket', function() {
       console.log(transactionsBlock1[7].logs);
       console.log(transactionsBlock1[8].logs);
       console.log(transactionsBlock1[9].logs);
+      console.log(transactionsBlock1[10].logs);
 
       assert.equal(JSON.parse(transactionsBlock1[6].logs).errors[0], 'you must use a custom_json signed with your active key');
       assert.equal(JSON.parse(transactionsBlock1[7].logs).errors[0], 'invalid params');
       assert.equal(JSON.parse(transactionsBlock1[8].logs).errors[0], 'symbol does not exist');
       assert.equal(JSON.parse(transactionsBlock1[9].logs).errors[0], 'must be the issuer');
+      assert.equal(JSON.parse(transactionsBlock1[10].logs).errors[0], 'market must be enabled first');
 
       // check if the market tables were created
       let exists = await database1.tableExists({
@@ -315,10 +327,22 @@ describe('nftmarket', function() {
       console.log(exists);
       assert.equal(exists, false);
 
+      exists = await database1.tableExists({
+        contract: 'nftmarket',
+        table: 'TESTbuyBook'
+      });
+
+      console.log(exists);
+      assert.equal(exists, false);
+
       // test that market cannot be enabled twice
       transactions = [];
-      transactions.push(new Transaction(38145387, 'TXID1240', 'cryptomancer', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
       transactions.push(new Transaction(38145387, 'TXID1241', 'cryptomancer', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145387, 'TXID1242', 'cryptomancer', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145387, 'TXID1243', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": false, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145387, 'TXID1244', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "badparam": "error" }'));
+      transactions.push(new Transaction(38145387, 'TXID1245', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "symbol": "INVALID" }'));
+      transactions.push(new Transaction(38145387, 'TXID1246', 'aggroed', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
 
       block = {
         refSteemBlockNumber: 38145387,
@@ -335,8 +359,48 @@ describe('nftmarket', function() {
       const block2 = res;
       const transactionsBlock2 = block2.transactions;
       console.log(transactionsBlock2[1].logs);
+      console.log(transactionsBlock2[2].logs);
+      console.log(transactionsBlock2[3].logs);
+      console.log(transactionsBlock2[4].logs);
+      console.log(transactionsBlock2[5].logs);
 
       assert.equal(JSON.parse(transactionsBlock2[1].logs).errors[0], 'market already enabled');
+      assert.equal(JSON.parse(transactionsBlock2[2].logs).errors[0], 'you must use a custom_json signed with your active key');
+      assert.equal(JSON.parse(transactionsBlock2[3].logs).errors[0], 'invalid params');
+      assert.equal(JSON.parse(transactionsBlock2[4].logs).errors[0], 'symbol does not exist');
+      assert.equal(JSON.parse(transactionsBlock2[5].logs).errors[0], 'must be the issuer');
+
+      // test that bid support cannot be enabled twice
+      transactions = [];
+      transactions.push(new Transaction(38145388, 'TXID1247', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145388, 'TXID1248', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+
+      block = {
+        refSteemBlockNumber: 38145388,
+        refSteemBlockId: 'ABCD1',
+        prevRefSteemBlockId: 'ABCD2',
+        timestamp: '2018-06-01T00:00:00',
+        transactions,
+      };
+
+      await send(blockchain.PLUGIN_NAME, 'MASTER', { action: blockchain.PLUGIN_ACTIONS.PRODUCE_NEW_BLOCK_SYNC, payload: block });
+
+      res = await database1.getBlockInfo(3);
+
+      const block3 = res;
+      const transactionsBlock3 = block3.transactions;
+      console.log(transactionsBlock3[1].logs);
+
+      assert.equal(JSON.parse(transactionsBlock3[1].logs).errors[0], 'bids already enabled');
+
+      // check if buy book table was created
+      exists = await database1.tableExists({
+        contract: 'nftmarket',
+        table: 'TESTbuyBook'
+      });
+
+      console.log(exists);
+      assert.equal(exists, true);
 
       resolve();
     })
