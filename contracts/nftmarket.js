@@ -62,6 +62,23 @@ const isValidIdArray = (arr) => {
   return true;
 };
 
+const isGroupingInOpenInterest = async (symbol, priceSymbol, grouping) => {
+  const metricsTableName = symbol + 'openInterest';
+
+  // TODO: replace with findOne
+  const openInterest = await api.db.find(
+    metricsTableName,
+    {
+      'sell',
+      priceSymbol,
+      grouping,
+    },
+    MAX_NUM_UNITS_OPERABLE,
+    0,
+    [{ index: 'side', descending: false }, { index: 'priceSymbol', descending: false }, { index: 'grouping', descending: false }],
+  );
+};
+
 actions.enableMarket = async (payload) => {
   const {
     symbol,
@@ -609,6 +626,41 @@ actions.buy = async (payload) => {
 
         // update open interest metrics
         await updateOpenInterest('sell', symbol, priceSymbol, groupingMap, nft.groupBy);
+      }
+    }
+  }
+};
+
+actions.bid = async (payload) => {
+  const {
+    symbol,
+    grouping,
+    quantity,
+    price,
+    priceSymbol,
+    marketAccount,
+    isSignedWithActiveKey,
+  } = payload;
+
+  if (!api.assert(symbol && typeof symbol === 'string'
+    && marketAccount && typeof marketAccount === 'string', 'invalid params')) {
+    return;
+  }
+
+  const marketTableName = symbol + 'buyBook';
+  const tableExists = await api.db.tableExists(marketTableName);
+
+  if (api.assert(isSignedWithActiveKey === true, 'you must use a custom_json signed with your active key')
+    && api.assert(grouping && typeof grouping === 'object'
+    && priceSymbol && typeof priceSymbol === 'string'
+    && price && typeof price === 'string' && !api.BigNumber(price).isNaN()
+    && quantity && typeof quantity === 'number' && quantity > 0 && Number.isInteger(quantity), 'invalid params')
+    && api.assert(tableExists, 'bids not enabled for symbol')) {
+    const finalMarketAccount = marketAccount.trim().toLowerCase();
+    if (api.assert(isValidSteemAccountLength(finalMarketAccount), 'invalid market account')) {
+      const nft = await api.db.findOneInTable('nft', 'nfts', { symbol });
+      if (!api.assert(nft && nft.groupBy && nft.groupBy.length > 0, 'market grouping not set')) {
+        return;
       }
     }
   }
