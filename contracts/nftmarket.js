@@ -65,18 +65,20 @@ const isValidIdArray = (arr) => {
 const isGroupingInOpenInterest = async (symbol, priceSymbol, grouping) => {
   const metricsTableName = symbol + 'openInterest';
 
-  // TODO: replace with findOne
-  const openInterest = await api.db.find(
+  const openInterest = await api.db.findOne(
     metricsTableName,
     {
-      'sell',
+      side: 'sell',
       priceSymbol,
       grouping,
-    },
-    MAX_NUM_UNITS_OPERABLE,
-    0,
-    [{ index: 'side', descending: false }, { index: 'priceSymbol', descending: false }, { index: 'grouping', descending: false }],
+    }
   );
+
+  // TODO: is this really working?
+  if (openInterest) {
+    return true;
+  }
+  return false;
 };
 
 actions.enableMarket = async (payload) => {
@@ -659,9 +661,28 @@ actions.bid = async (payload) => {
     const finalMarketAccount = marketAccount.trim().toLowerCase();
     if (api.assert(isValidSteemAccountLength(finalMarketAccount), 'invalid market account')) {
       const nft = await api.db.findOneInTable('nft', 'nfts', { symbol });
-      if (!api.assert(nft && nft.groupBy && nft.groupBy.length > 0, 'market grouping not set')) {
+      if (!api.assert(nft && nft.groupBy && nft.groupBy.length > 0, 'market grouping not set')
+        || !api.assert(isGroupingInOpenInterest(symbol, priceSymbol, grouping), 'grouping must be in open interest')) {
         return;
       }
+
+      // TODO: check if open bid with this price already exists, and if so update it instead of creating a new bid
+
+      const blockDate = new Date(`${api.steemBlockTimestamp}.000Z`);
+      const timestamp = blockDate.getTime();
+
+      api.emit('buyOrder', {
+        //account: order.account,
+        //ownedBy: order.ownedBy,
+        symbol,
+        grouping,
+        quantity,
+        timestamp,
+        //price: order.price,
+        //priceSymbol: order.priceSymbol,
+        //fee,
+        //orderId: result._id,
+      });
     }
   }
 };
