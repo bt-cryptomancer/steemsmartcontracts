@@ -74,7 +74,6 @@ const isGroupingInOpenInterest = async (symbol, priceSymbol, grouping) => {
     }
   );
 
-  // TODO: is this really working?
   if (openInterest) {
     return true;
   }
@@ -661,8 +660,11 @@ actions.bid = async (payload) => {
     const finalMarketAccount = marketAccount.trim().toLowerCase();
     if (api.assert(isValidSteemAccountLength(finalMarketAccount), 'invalid market account')) {
       const nft = await api.db.findOneInTable('nft', 'nfts', { symbol });
-      if (!api.assert(nft && nft.groupBy && nft.groupBy.length > 0, 'market grouping not set')
-        || !api.assert(isGroupingInOpenInterest(symbol, priceSymbol, grouping), 'grouping must be in open interest')) {
+      if (!api.assert(nft && nft.groupBy && nft.groupBy.length > 0, 'market grouping not set')) {
+        return;
+      }
+      const isValidGrouping = await isGroupingInOpenInterest(symbol, priceSymbol, grouping);
+      if (!api.assert(isValidGrouping, 'grouping must be in open interest')) {
         return;
       }
 

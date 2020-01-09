@@ -1839,7 +1839,7 @@ describe('nftmarket', function() {
       transactions.push(new Transaction(38145386, 'TXID1245', 'aggroed', 'nftmarket', 'sell', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "nfts": ["1","1","2"], "price": "2.000", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "fee": 500 }`));
 
       // now place a bid for the same grouping as the sell order
-      transactions.push(new Transaction(38145386, 'TXID1246', 'cryptomancer', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "false"}, "quantity": 5, "price": "2.000", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1246', 'cryptomancer', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "2.000", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
 
       let block = {
         refSteemBlockNumber: 38145386,
