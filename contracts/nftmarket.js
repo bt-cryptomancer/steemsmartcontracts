@@ -80,6 +80,30 @@ const isGroupingInOpenInterest = async (symbol, priceSymbol, grouping) => {
   return false;
 };
 
+const isLessThanLowestAsk = async (symbol, priceSymbol, priceDec, grouping) => {
+  const sellBookTableName = symbol + 'sellBook';
+
+  const orders = await api.db.find(
+    sellBookTableName,
+    {
+      priceSymbol,
+      grouping,
+      priceDec: {
+        $lte: priceDec,
+      },
+    },
+    MAX_NUM_UNITS_OPERABLE,
+    0,
+    [{ index: 'grouping', descending: false }, { index: 'priceSymbol', descending: false }],
+  );
+
+  if (orders.length > 0) {
+    return false;
+  }
+
+  return true;
+};
+
 actions.enableMarket = async (payload) => {
   const {
     symbol,
@@ -668,23 +692,112 @@ actions.bid = async (payload) => {
         return;
       }
 
-      // TODO: check if open bid with this price already exists, and if so update it instead of creating a new bid
+      // get the price token params
+      const token = await api.db.findOneInTable('tokens', 'tokens', { symbol: priceSymbol });
+      if (api.assert(token
+        && api.BigNumber(price).gt(0)
+        && countDecimals(price) <= token.precision, 'invalid price')) {
+        // verify this bid does not cross the lowest ask
+        const finalPrice = api.BigNumber(price).toFixed(token.precision);
+        const priceDec = { $numberDecimal: finalPrice };
+        const isValidBid = await isLessThanLowestAsk(symbol, priceSymbol, priceDec, grouping);
+        if (!api.assert(isValidBid, 'bid price must be less than the lowest ask')) {
+          return;
+        }
 
-      const blockDate = new Date(`${api.steemBlockTimestamp}.000Z`);
-      const timestamp = blockDate.getTime();
+        // verify bidder has enough funds for the purchase
+        const nbTokensToLock = api.BigNumber(price)
+          .multipliedBy(quantity)
+          .toFixed(token.precision);
+        const priceTokenBalance = await api.db.findOneInTable('tokens', 'balances', { account: api.sender, symbol: priceSymbol });
+        const isBalanceSufficient = priceTokenBalance && api.BigNumber(priceTokenBalance.balance).gte(nbTokensToLock);
+        if (!api.assert(isBalanceSufficient, 'insufficient token balance to pay for your bid')) {
+          return;
+        }
 
-      api.emit('buyOrder', {
-        //account: order.account,
-        //ownedBy: order.ownedBy,
-        symbol,
-        grouping,
-        quantity,
-        timestamp,
-        //price: order.price,
-        //priceSymbol: order.priceSymbol,
-        //fee,
-        //orderId: result._id,
-      });
+        // lock the funds for purchasing by moving them to this contract for safekeeping
+        const res = await api.executeSmartContract('tokens', 'transferToContract', {
+          to: CONTRACT_NAME, symbol: priceSymbol, quantity: nbTokensToLock, isSignedWithActiveKey,
+        });
+        if (!api.assert(isTokenTransferVerified(res, api.sender, CONTRACT_NAME, priceSymbol, nbTokensToLock, 'transferToContract'), 'unable to lock tokens for payment')) {
+          return;
+        }
+
+        const blockDate = new Date(`${api.steemBlockTimestamp}.000Z`);
+        const timestamp = blockDate.getTime();
+
+        // if an order with this price already exists, add to the existing quantity
+        const currentOrder = await api.db.findOne(
+          marketTableName,
+          {
+            account: api.sender,
+            ownedBy: 'u',
+            grouping,
+            price: finalPrice,
+            priceSymbol,
+          }
+        );
+
+        if (currentOrder) {
+          // update existing order
+          const oldQuantity = currentOrder.quantity;
+          const oldTimestamp = currentOrder.timestamp;
+          currentOrder.quantity += quantity;
+          currentOrder.timestamp = timestamp;
+
+          await api.db.update(marketTableName, currentOrder);
+
+          api.emit('editBid', {
+            symbol,
+            grouping,
+            oldQuantity,
+            newQuantity: currentOrder.quantity,
+            oldTimestamp,
+            newTimestamp: currentOrder.timestamp,
+            priceSymbol: currentOrder.priceSymbol,
+            orderId: currentOrder._id,
+          });
+        } else {
+          // create a new order
+          const order = {
+            account: api.sender,
+            ownedBy: 'u',
+            grouping,
+            quantity,
+            timestamp,
+            price: finalPrice,
+            priceDec,
+            priceSymbol,
+            marketAccount: finalMarketAccount,
+          };
+
+          const result = await api.db.insert(marketTableName, order);
+
+          api.emit('buyOrder', {
+            account: order.account,
+            ownedBy: order.ownedBy,
+            symbol,
+            grouping,
+            quantity,
+            timestamp,
+            price: order.price,
+            priceSymbol: order.priceSymbol,
+            marketAccount: order.marketAccount,
+            orderId: result._id,
+          });
+        }
+
+        // update open interest metrics
+        const groupingMap = {};
+        const key = makeGroupingKey(grouping, nft.groupBy);
+        const groupInfo = {
+          grouping,
+          isInCollection: false,
+          count: quantity,
+        };
+        groupingMap[key] = groupInfo;
+        await updateOpenInterest('buy', symbol, priceSymbol, groupingMap, nft.groupBy);
+      }
     }
   }
 };
