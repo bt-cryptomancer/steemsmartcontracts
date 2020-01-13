@@ -1810,6 +1810,138 @@ describe('nftmarket', function() {
       });
   });
 
+  it('does not place a bid', (done) => {
+    new Promise(async (resolve) => {
+
+      await loadPlugin(blockchain);
+      database1 = new Database();
+      await database1.init(conf.databaseURL, conf.databaseName);
+
+      let transactions = [];
+      // setup environment
+      transactions.push(new Transaction(38145386, 'TXID1230', 'steemsc', 'contract', 'update', JSON.stringify(tknContractPayload)));
+      transactions.push(new Transaction(38145386, 'TXID1231', 'steemsc', 'contract', 'deploy', JSON.stringify(nftContractPayload)));
+      transactions.push(new Transaction(38145386, 'TXID1232', 'steemsc', 'contract', 'deploy', JSON.stringify(nftmarketContractPayload)));
+      transactions.push(new Transaction(38145386, 'TXID1233', 'steemsc', 'nft', 'updateParams', `{ "nftCreationFee": "5", "nftIssuanceFee": {"${CONSTANTS.UTILITY_TOKEN_SYMBOL}":"0.1"}, "dataPropertyCreationFee": "1" }`));
+      transactions.push(new Transaction(38145386, 'TXID1234', 'steemsc', 'tokens', 'transfer', `{ "symbol":"${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "to":"cryptomancer", "quantity":"200", "isSignedWithActiveKey":true }`));
+      transactions.push(new Transaction(38145386, 'TXID1235', 'steemsc', 'tokens', 'transfer', `{ "symbol":"${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "to":"marc", "quantity":"8.75", "isSignedWithActiveKey":true }`));
+      transactions.push(new Transaction(38145386, 'TXID1236', 'cryptomancer', 'nft', 'create', '{ "isSignedWithActiveKey": true, "name":"test NFT", "symbol":"TEST", "url":"http://mynft.com" }'));
+      transactions.push(new Transaction(38145386, 'TXID1237', 'cryptomancer', 'nft', 'addProperty', '{ "isSignedWithActiveKey":true, "symbol":"TEST", "name":"color", "type":"string" }'));
+      transactions.push(new Transaction(38145386, 'TXID1238', 'cryptomancer', 'nft', 'addProperty', '{ "isSignedWithActiveKey":true, "symbol":"TEST", "name":"level", "type":"number" }'));
+      transactions.push(new Transaction(38145386, 'TXID1239', 'cryptomancer', 'nft', 'addProperty', '{ "isSignedWithActiveKey":true, "symbol":"TEST", "name":"isRare", "type":"boolean" }'));
+      transactions.push(new Transaction(38145386, 'TXID1240', 'cryptomancer', 'nft', 'issue', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "to":"aggroed", "feeSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}" }`));
+      transactions.push(new Transaction(38145386, 'TXID1241', 'cryptomancer', 'nft', 'issue', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "to":"marc", "feeSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}" }`));
+      transactions.push(new Transaction(38145386, 'TXID1242', 'cryptomancer', 'nft', 'setProperties', '{ "symbol":"TEST", "nfts": [{"id":"1", "properties": {"level":3, "color":"red", "isRare": true}}] }'));
+
+      // all bids below here should fail validations
+      transactions.push(new Transaction(38145386, 'TXID1243', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1244', 'cryptomancer', 'nftmarket', 'enableMarket', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145386, 'TXID1245', 'cryptomancer', 'nftmarket', 'enableBids', '{ "isSignedWithActiveKey": true, "symbol": "TEST" }'));
+      transactions.push(new Transaction(38145386, 'TXID1246', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1247', 'cryptomancer', 'nft', 'setGroupBy', '{ "isSignedWithActiveKey":true, "symbol":"TEST", "properties": ["level","isRare"] }'));
+      transactions.push(new Transaction(38145386, 'TXID1248', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1249', 'aggroed', 'nftmarket', 'sell', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "nfts": ["1","1","2"], "price": "2.000", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "fee": 500 }`));
+      transactions.push(new Transaction(38145386, 'TXID1250', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": 45, "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1251', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}" }`));
+      transactions.push(new Transaction(38145386, 'TXID1252', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5.1, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1253', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": false, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1254', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "p" }`));
+      transactions.push(new Transaction(38145386, 'TXID1255', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "1.750000000000000001", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1256', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "2", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1257', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 5, "price": "3.55", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+      transactions.push(new Transaction(38145386, 'TXID1258', 'marc', 'nftmarket', 'bid', `{ "isSignedWithActiveKey": true, "symbol": "TEST", "grouping": {"level": "3", "isRare": "true"}, "quantity": 6, "price": "1.75", "priceSymbol": "${CONSTANTS.UTILITY_TOKEN_SYMBOL}", "marketAccount": "peakmonsters" }`));
+
+      let block = {
+        refSteemBlockNumber: 38145386,
+        refSteemBlockId: 'ABCD1',
+        prevRefSteemBlockId: 'ABCD2',
+        timestamp: '2018-06-01T00:00:00',
+        transactions,
+      };
+
+      await send(blockchain.PLUGIN_NAME, 'MASTER', { action: blockchain.PLUGIN_ACTIONS.PRODUCE_NEW_BLOCK_SYNC, payload: block });
+
+      let res = await database1.getBlockInfo(1);
+
+      const block1 = res;
+      const transactionsBlock1 = block1.transactions;
+      console.log(transactionsBlock1[13].logs);
+      console.log(transactionsBlock1[16].logs);
+      console.log(transactionsBlock1[18].logs);
+      console.log(transactionsBlock1[20].logs);
+      console.log(transactionsBlock1[21].logs);
+      console.log(transactionsBlock1[22].logs);
+      console.log(transactionsBlock1[23].logs);
+      console.log(transactionsBlock1[24].logs);
+      console.log(transactionsBlock1[25].logs);
+      console.log(transactionsBlock1[26].logs);
+      console.log(transactionsBlock1[27].logs);
+      console.log(transactionsBlock1[28].logs);
+
+      assert.equal(JSON.parse(transactionsBlock1[13].logs).errors[0], 'bids not enabled for symbol');
+      assert.equal(JSON.parse(transactionsBlock1[16].logs).errors[0], 'market grouping not set');
+      assert.equal(JSON.parse(transactionsBlock1[18].logs).errors[0], 'grouping must be in open interest');
+      assert.equal(JSON.parse(transactionsBlock1[20].logs).errors[0], 'invalid params');
+      assert.equal(JSON.parse(transactionsBlock1[21].logs).errors[0], 'invalid params');
+      assert.equal(JSON.parse(transactionsBlock1[22].logs).errors[0], 'invalid params');
+      assert.equal(JSON.parse(transactionsBlock1[23].logs).errors[0], 'you must use a custom_json signed with your active key');
+      assert.equal(JSON.parse(transactionsBlock1[24].logs).errors[0], 'invalid market account');
+      assert.equal(JSON.parse(transactionsBlock1[25].logs).errors[0], 'invalid price');
+      assert.equal(JSON.parse(transactionsBlock1[26].logs).errors[0], 'bid price must be less than the lowest ask');
+      assert.equal(JSON.parse(transactionsBlock1[27].logs).errors[0], 'bid price must be less than the lowest ask');
+      assert.equal(JSON.parse(transactionsBlock1[28].logs).errors[0], 'insufficient token balance to pay for your bid');
+
+      // make sure payment tokens were NOT locked in the market contract
+      let balances = await database1.find({
+        contract: 'tokens',
+        table: 'contractsBalances',
+        query: {}
+      });
+      assert.equal(balances.length, 0);
+
+      balances = await database1.find({
+        contract: 'tokens',
+        table: 'balances',
+        query: { "account": { "$in" : ["marc"] }}
+      });
+
+      assert.equal(balances[0].symbol, `${CONSTANTS.UTILITY_TOKEN_SYMBOL}`);
+      assert.equal(balances[0].account, 'marc');
+      assert.equal(balances[0].balance, '8.75');
+
+      // buy book should be empty
+      let orders = await database1.find({
+        contract: 'nftmarket',
+        table: 'TESTbuyBook',
+        query: {}
+      });
+
+      console.log(orders);
+      assert.equal(orders.length, 0);
+
+      // check that open interest was recorded only for the sell order
+      // (should be no buy side open interest)
+      let openInterest = await database1.find({
+        contract: 'nftmarket',
+        table: 'TESTopenInterest',
+        query: {}
+      });
+
+      assert.equal(openInterest.length, 1);
+      assert.equal(openInterest[0].priceSymbol, `${CONSTANTS.UTILITY_TOKEN_SYMBOL}`);
+      assert.equal(JSON.stringify(openInterest[0].grouping), '{"level":"3","isRare":"true"}');
+      assert.equal(openInterest[0].count, 1);
+      assert.equal(openInterest[0].side, 'sell');
+
+      resolve();
+    })
+      .then(() => {
+        unloadPlugin(blockchain);
+        database1.close();
+        done();
+      });
+  });
+
   it('places a bid', (done) => {
     new Promise(async (resolve) => {
 
