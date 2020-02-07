@@ -30,8 +30,6 @@ class Block {
     return SHA256(
       this.previousHash
       + this.previousDatabaseHash
-      + this.databaseHash
-      + this.merkleRoot
       + this.blockNumber.toString()
       + this.refSteemBlockNumber.toString()
       + this.refSteemBlockId
@@ -100,9 +98,10 @@ class Block {
       virtualTransactions.push(new Transaction(0, '', 'null', 'tokens', 'checkPendingUndelegations', ''));
     }
 
-    if (this.refSteemBlockNumber >= 37899120) {
-      virtualTransactions.push(new Transaction(0, '', 'null', 'witnesses', 'scheduleWitnesses', ''));
-    }
+    // TODO: cleanup
+    // if (this.refSteemBlockNumber >= 37899120) {
+    virtualTransactions.push(new Transaction(0, '', 'null', 'witnesses', 'scheduleWitnesses', ''));
+    // }
 
     if (this.refSteemBlockNumber >= 38145385) {
       // issue new utility tokens every time the refSteemBlockNumber % 1200 equals 0
@@ -165,7 +164,7 @@ class Block {
     let newCurrentDatabaseHash = currentDatabaseHash;
 
     // init the database hash for that transactions
-    await database.initDatabaseHash(newCurrentDatabaseHash);
+    database.initDatabaseHash(newCurrentDatabaseHash);
 
     if (sender && contract && action) {
       if (contract === 'contract' && (action === 'deploy' || action === 'update') && payload) {
@@ -179,9 +178,6 @@ class Block {
         } else {
           results = { logs: { errors: ['the contract deployment is currently unavailable'] } };
         }
-      } else if (contract === 'blockProduction' && payload) {
-        // results = await bp.processTransaction(transaction); // eslint-disable-line
-        results = { logs: { errors: ['blockProduction contract not available'] } };
       } else {
         results = await SmartContracts.executeSmartContract(// eslint-disable-line
           database, transaction, this.blockNumber, this.timestamp,
@@ -193,7 +189,7 @@ class Block {
     }
 
     // get the database hash
-    newCurrentDatabaseHash = await database.getDatabaseHash();
+    newCurrentDatabaseHash = database.getDatabaseHash();
 
 
     // console.log('transac logs', results.logs);

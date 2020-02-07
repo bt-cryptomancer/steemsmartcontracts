@@ -144,6 +144,8 @@ let witnessesContractPayload = {
   code: base64ContractCode,
 };
 
+console.log(base64ContractCode)
+
 describe('witnesses', function () {
   this.timeout(60000);
 
@@ -1622,7 +1624,7 @@ describe('witnesses', function () {
       });
   });
 
-  it('changes the current witness if it has not validated a round in time', (done) => {
+  it.skip('changes the current witness if it has not validated a round in time', (done) => {
     new Promise(async (resolve) => {
       
       await loadPlugin(blockchain);
