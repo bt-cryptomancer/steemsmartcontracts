@@ -656,6 +656,85 @@ actions.buy = async (payload) => {
   }
 };
 
+actions.cancelBid = async (payload) => {
+  const {
+    symbol,
+    orderIds,
+    isSignedWithActiveKey,
+  } = payload;
+
+  if (!api.assert(symbol && typeof symbol === 'string', 'invalid params')) {
+    return;
+  }
+
+  const marketTableName = symbol + 'buyBook';
+  const tableExists = await api.db.tableExists(marketTableName);
+
+  if (api.assert(isSignedWithActiveKey === true, 'you must use a custom_json signed with your active key')
+    && isValidIdArray(orderIds)
+    && api.assert(tableExists, 'bids not enabled for symbol')) {
+    const nft = await api.db.findOneInTable('nft', 'nfts', { symbol });
+    if (!api.assert(nft && nft.groupBy && nft.groupBy.length > 0, 'market grouping not set')) {
+      return;
+    }
+
+    // convert input order IDs to numbers
+    const finalOrderIds = [];
+    orderIds.forEach((id) => {
+      finalOrderIds.push(api.BigNumber(id).toNumber());
+    });
+
+    // look up order info
+    const orders = await api.db.find(
+      marketTableName,
+      {
+        _id: {
+          $in: finalOrderIds,
+        },
+      },
+      MAX_NUM_UNITS_OPERABLE,
+      0,
+      [{ index: '_id', descending: false }],
+    );
+
+    if (orders.length > 0) {
+      // need to make sure that caller is actually the owner of each order
+      //const ids = [];
+      //const idMap = {};
+      let priceSymbol = '';
+      let nbTokensToUnlock = api.BigNumber(0);
+      for (let i = 0; i < orders.length; i += 1) {
+        const order = orders[i];
+        if (priceSymbol === '') {
+          ({ priceSymbol } = order);
+        }
+        if (!api.assert(order.account === api.sender && order.ownedBy === 'u', 'all orders must be your own')
+          || !api.assert(priceSymbol === order.priceSymbol, 'all orders must have the same price symbol')) {
+          return;
+        }
+        const nbTokensForOrder = api.BigNumber(order.price).multipliedBy(order.quantity);
+        nbTokensToUnlock = nbTokensToUnlock.plus(nbTokensForOrder);
+        //ids.push(order.nftId);
+        //idMap[order.nftId] = order;
+      }
+
+      // get the price token params
+      const token = await api.db.findOneInTable('tokens', 'tokens', { symbol: priceSymbol });
+      if (!api.assert(token)) {
+        return;
+      }
+
+      nbTokensToUnlock = nbTokensToUnlock.toFixed(token.precision);
+
+      // move the locked tokens from the market back to their owner
+      const res = await api.transferTokens(api.sender, priceSymbol, nbTokensToUnlock, 'user');
+      if (!api.assert(isTokenTransferVerified(res, CONTRACT_NAME, api.sender, priceSymbol, nbTokensToUnlock, 'transferFromContract'), 'unable to return locked tokens for bids')) {
+        return;
+      }
+    }
+  }
+};
+
 actions.bid = async (payload) => {
   const {
     symbol,
