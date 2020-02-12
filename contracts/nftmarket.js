@@ -685,7 +685,7 @@ actions.cancelBid = async (payload) => {
     });
 
     // look up order info
-    const orders = await api.db.find(
+    let orders = await api.db.find(
       marketTableName,
       {
         _id: {
@@ -699,8 +699,6 @@ actions.cancelBid = async (payload) => {
 
     if (orders.length > 0) {
       // need to make sure that caller is actually the owner of each order
-      //const ids = [];
-      //const idMap = {};
       let priceSymbol = '';
       let nbTokensToUnlock = api.BigNumber(0);
       for (let i = 0; i < orders.length; i += 1) {
@@ -714,8 +712,6 @@ actions.cancelBid = async (payload) => {
         }
         const nbTokensForOrder = api.BigNumber(order.price).multipliedBy(order.quantity);
         nbTokensToUnlock = nbTokensToUnlock.plus(nbTokensForOrder);
-        //ids.push(order.nftId);
-        //idMap[order.nftId] = order;
       }
 
       // get the price token params
@@ -731,6 +727,63 @@ actions.cancelBid = async (payload) => {
       if (!api.assert(isTokenTransferVerified(res, CONTRACT_NAME, api.sender, priceSymbol, nbTokensToUnlock, 'transferFromContract'), 'unable to return locked tokens for bids')) {
         return;
       }
+
+      // now we can cancel the bids one by one
+      let nbPendingCancelations = orders.length;
+      let firstTry = true;
+      const groupingMap = {};
+      while (nbPendingCancelations > 0) {
+        for (let index = 0; index < nbPendingCancelations; index += 1) {
+          const order = orders[index];
+
+          await api.db.remove(marketTableName, order);
+
+          if (firstTry) {
+            api.emit('cancelBid', {
+              account: order.account,
+              ownedBy: order.ownedBy,
+              symbol,
+              grouping: order.grouping,
+              quantity: order.quantity,
+              timestamp: order.timestamp,
+              price: order.price,
+              priceSymbol: order.priceSymbol,
+              marketAccount: order.marketAccount,
+              orderId: order._id,
+            });
+
+            const key = makeGroupingKey(order.grouping, nft.groupBy);
+            const groupInfo = key in groupingMap
+              ? groupingMap[key]
+              : {
+                grouping: order.grouping,
+                isInCollection: false,
+                count: 0,
+              };
+            groupInfo.count -= order.quantity;
+            groupingMap[key] = groupInfo;
+          }
+        }
+        firstTry = false;
+
+        // sanity check to make sure bids were actually removed
+        orders = await api.db.find(
+          marketTableName,
+          {
+            _id: {
+              $in: finalOrderIds,
+            },
+          },
+          MAX_NUM_UNITS_OPERABLE,
+          0,
+          [{ index: '_id', descending: false }],
+        );
+
+        nbPendingCancelations = orders.length;
+      }
+
+      // update open interest metrics
+      await updateOpenInterest('buy', symbol, priceSymbol, groupingMap, nft.groupBy);
     }
   }
 };
