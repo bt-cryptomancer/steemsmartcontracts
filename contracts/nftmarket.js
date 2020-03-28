@@ -716,7 +716,7 @@ actions.cancelBid = async (payload) => {
 
       // get the price token params
       const token = await api.db.findOneInTable('tokens', 'tokens', { symbol: priceSymbol });
-      if (!api.assert(token)) {
+      if (!token) {
         return;
       }
 
