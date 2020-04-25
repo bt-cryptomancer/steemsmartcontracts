@@ -126,7 +126,7 @@ let mktContractPayload = {
 contractCode = fs.readFileSync('./contracts/marketmaker.js');
 contractCode = contractCode.toString();
 contractCode = contractCode.replace(/'\$\{CONSTANTS.UTILITY_TOKEN_SYMBOL\}\$'/g, CONSTANTS.UTILITY_TOKEN_SYMBOL);
-let base64ContractCode = Base64.encode(contractCode);
+base64ContractCode = Base64.encode(contractCode);
 
 let mmContractPayload = {
   name: 'marketmaker',
@@ -189,8 +189,8 @@ describe('marketmaker', function() {
       await database1.init(conf.databaseURL, conf.databaseName);
 
       let transactions = [];
-      transactions.push(new Transaction(38145386, 'TXID1230', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'contract', 'deploy', JSON.stringify(critterContractPayload)));
-      transactions.push(new Transaction(38145386, 'TXID1231', 'cryptomancer', 'crittermanager', 'updateParams', `{ "editionMapping": {"${CONSTANTS.UTILITY_TOKEN_SYMBOL}":1,"ALPHA":2,"BETA":3,"UNTAMED":4} }`));
+      transactions.push(new Transaction(38145386, 'TXID1230', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'contract', 'deploy', JSON.stringify(mmContractPayload)));
+      transactions.push(new Transaction(38145386, 'TXID1231', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'marketmaker', 'updateParams', '{ "premiumBaseStake": "999", "premiumStakePerMarket": "50", "freeDurationBlocks": "100", "freeCooldownBlocks": "150", "authorizedTicker": "theboss" }'));
 
       let block = {
         refHiveBlockNumber: 38145386,
@@ -204,12 +204,18 @@ describe('marketmaker', function() {
 
       // check if the params updated OK
       const params = await database1.findOne({
-        contract: 'crittermanager',
+        contract: 'marketmaker',
         table: 'params',
         query: {}
       });
 
-      assert.equal(JSON.stringify(params.editionMapping), `{"${CONSTANTS.UTILITY_TOKEN_SYMBOL}":1,"ALPHA":2,"BETA":3,"UNTAMED":4}`);
+      console.log(params);
+
+      assert.equal(params.premiumBaseStake, '999');
+      assert.equal(params.premiumStakePerMarket, '50');
+      assert.equal(params.freeDurationBlocks, '100');
+      assert.equal(params.freeCooldownBlocks, '150');
+      assert.equal(params.authorizedTicker, 'theboss');
 
       resolve();
     })
@@ -228,10 +234,10 @@ describe('marketmaker', function() {
       await database1.init(conf.databaseURL, conf.databaseName);
 
       let transactions = [];
-      transactions.push(new Transaction(38145386, 'TXID1230', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'contract', 'deploy', JSON.stringify(critterContractPayload)));
-      transactions.push(new Transaction(38145386, 'TXID1231', 'aggroed', 'crittermanager', 'updateParams', `{ "editionMapping": {"${CONSTANTS.UTILITY_TOKEN_SYMBOL}":1,"ALPHA":2,"BETA":3,"UNTAMED":4} }`));
-      transactions.push(new Transaction(38145386, 'TXID1232', 'cryptomancer', 'crittermanager', 'updateParams', `{ "wrongKey": {"${CONSTANTS.UTILITY_TOKEN_SYMBOL}":1,"ALPHA":2,"BETA":3,"UNTAMED":4} }`));
-      transactions.push(new Transaction(38145386, 'TXID1233', 'cryptomancer', 'crittermanager', 'updateParams', `{ "editionMapping": 666 }`));
+      transactions.push(new Transaction(38145386, 'TXID1230', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'contract', 'deploy', JSON.stringify(mmContractPayload)));
+      transactions.push(new Transaction(38145386, 'TXID1231', 'aggroed', 'marketmaker', 'updateParams', '{ "premiumBaseStake": "999", "premiumStakePerMarket": "50", "freeDurationBlocks": "100", "freeCooldownBlocks": "150" }'));
+      transactions.push(new Transaction(38145386, 'TXID1232', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'marketmaker', 'updateParams', '{ "wrongKey": "oops"  }'));
+      transactions.push(new Transaction(38145386, 'TXID1233', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'marketmaker', 'updateParams', '{ "premiumBaseStake": 666 }'));
 
       let block = {
         refHiveBlockNumber: 38145386,
@@ -245,12 +251,91 @@ describe('marketmaker', function() {
 
       // params should not have changed from their initial values
       const params = await database1.findOne({
-        contract: 'crittermanager',
+        contract: 'marketmaker',
         table: 'params',
         query: {}
       });
 
-      assert.equal(JSON.stringify(params.editionMapping), `{"${CONSTANTS.UTILITY_TOKEN_SYMBOL}":1,"ALPHA":2,"BETA":3}`);
+      console.log(params);
+
+      assert.equal(params.premiumBaseStake, '1000');
+      assert.equal(params.premiumStakePerMarket, '200');
+      assert.equal(params.freeDurationBlocks, '403200');
+      assert.equal(params.freeCooldownBlocks, '403200');
+      assert.equal(params.authorizedTicker, 'enginemaker');
+
+      resolve();
+    })
+      .then(() => {
+        unloadPlugin(blockchain);
+        database1.close();
+        done();
+      });
+  });
+
+  it('registers a new user', (done) => {
+    new Promise(async (resolve) => {
+
+      await loadPlugin(blockchain);
+      database1 = new Database();
+      await database1.init(conf.databaseURL, conf.databaseName);
+
+      let transactions = [];
+      transactions.push(new Transaction(38145386, 'TXID1230', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'contract', 'deploy', JSON.stringify(mmContractPayload)));
+      transactions.push(new Transaction(38145386, 'TXID1231', CONSTANTS.HIVE_ENGINE_ACCOUNT, 'marketmaker', 'updateParams', '{ "premiumBaseStake": "100", "premiumStakePerMarket": "10", "freeDurationBlocks": "1000", "freeCooldownBlocks": "1000" }'));
+      transactions.push(new Transaction(38145386, 'TXID1232', 'cryptomancer', 'marketmaker', 'register', '{ "isSignedWithActiveKey": true }'));
+
+      let block = {
+        refHiveBlockNumber: 38145386,
+        refHiveBlockId: 'ABCD1',
+        prevRefHiveBlockId: 'ABCD2',
+        timestamp: '2018-06-01T00:00:00',
+        transactions,
+      };
+
+      await send(blockchain.PLUGIN_NAME, 'MASTER', { action: blockchain.PLUGIN_ACTIONS.PRODUCE_NEW_BLOCK_SYNC, payload: block });
+
+      // check if the user was registered OK
+      const user = await database1.findOne({
+        contract: 'marketmaker',
+        table: 'users',
+        query: {}
+      });
+
+      console.log(user);
+
+      assert.equal(user.account, 'cryptomancer');
+      assert.equal(user.isPremium, false );
+      assert.equal(user.isOnCooldown, false );
+      assert.equal(user.isEnabled, true );
+      assert.equal(user.markets, 0 );
+      assert.equal(user.timeLimitBlocks, '1000');
+      assert.equal(user.lastTickBlock, 0);
+      assert.equal(user.creationTimestamp, 1527811200000);
+
+      // verify failure conditions
+      transactions = [];
+      transactions.push(new Transaction(38145387, 'TXID1233', 'cryptomancer', 'marketmaker', 'register', '{ "isSignedWithActiveKey": true }'));
+      transactions.push(new Transaction(38145387, 'TXID1234', 'aggroed', 'marketmaker', 'register', '{ "isSignedWithActiveKey": false }'));
+
+      block = {
+        refHiveBlockNumber: 38145387,
+        refHiveBlockId: 'ABCD1',
+        prevRefHiveBlockId: 'ABCD2',
+        timestamp: '2018-06-01T00:00:00',
+        transactions,
+      };
+
+      await send(blockchain.PLUGIN_NAME, 'MASTER', { action: blockchain.PLUGIN_ACTIONS.PRODUCE_NEW_BLOCK_SYNC, payload: block });
+
+      const block2 = await database1.getBlockInfo(2);
+      const transactionsBlock2 = block2.transactions;
+
+      console.log(transactionsBlock2[0].logs);
+      console.log(transactionsBlock2[1].logs);
+
+      assert.equal(JSON.parse(transactionsBlock2[0].logs).errors[0], 'user already registered');
+      assert.equal(JSON.parse(transactionsBlock2[1].logs).errors[0], 'you must use a custom_json signed with your active key');
 
       resolve();
     })

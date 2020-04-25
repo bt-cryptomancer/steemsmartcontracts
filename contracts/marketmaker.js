@@ -19,6 +19,9 @@ actions.createSSC = async () => {
     const params = {};
     params.premiumBaseStake = '1000';
     params.premiumStakePerMarket = '200';
+    params.freeDurationBlocks = '403200';  // 14 days
+    params.freeCooldownBlocks = '403200';  // 14 days
+    params.authorizedTicker = 'enginemaker';
     await api.db.insert('params', params);
   }
 };
@@ -27,25 +30,29 @@ actions.updateParams = async (payload) => {
   if (api.sender !== api.owner) return;
 
   const {
-    nftCreationFee,
-    nftIssuanceFee,
-    dataPropertyCreationFee,
-    enableDelegationFee,
+    premiumBaseStake,
+    premiumStakePerMarket,
+    freeDurationBlocks,
+    freeCooldownBlocks,
+    authorizedTicker,
   } = payload;
 
   const params = await api.db.findOne('params', {});
 
-  if (nftCreationFee && typeof nftCreationFee === 'string' && !api.BigNumber(nftCreationFee).isNaN() && api.BigNumber(nftCreationFee).gte(0)) {
-    params.nftCreationFee = nftCreationFee;
+  if (premiumBaseStake && typeof premiumBaseStake === 'string' && !api.BigNumber(premiumBaseStake).isNaN() && api.BigNumber(premiumBaseStake).gte(0)) {
+    params.premiumBaseStake = premiumBaseStake;
   }
-  if (nftIssuanceFee && typeof nftIssuanceFee === 'object') {
-    params.nftIssuanceFee = nftIssuanceFee;
+  if (premiumStakePerMarket && typeof premiumStakePerMarket === 'string' && !api.BigNumber(premiumStakePerMarket).isNaN() && api.BigNumber(premiumStakePerMarket).gte(0)) {
+    params.premiumStakePerMarket = premiumStakePerMarket;
   }
-  if (dataPropertyCreationFee && typeof dataPropertyCreationFee === 'string' && !api.BigNumber(dataPropertyCreationFee).isNaN() && api.BigNumber(dataPropertyCreationFee).gte(0)) {
-    params.dataPropertyCreationFee = dataPropertyCreationFee;
+  if (freeDurationBlocks && typeof freeDurationBlocks === 'string' && !api.BigNumber(freeDurationBlocks).isNaN() && api.BigNumber(freeDurationBlocks).gte(0)) {
+    params.freeDurationBlocks = freeDurationBlocks;
   }
-  if (enableDelegationFee && typeof enableDelegationFee === 'string' && !api.BigNumber(enableDelegationFee).isNaN() && api.BigNumber(enableDelegationFee).gte(0)) {
-    params.enableDelegationFee = enableDelegationFee;
+  if (freeCooldownBlocks && typeof freeCooldownBlocks === 'string' && !api.BigNumber(freeCooldownBlocks).isNaN() && api.BigNumber(freeCooldownBlocks).gte(0)) {
+    params.freeCooldownBlocks = freeCooldownBlocks;
+  }
+  if (authorizedTicker && typeof authorizedTicker === 'string') {
+    params.authorizedTicker = authorizedTicker;
   }
 
   await api.db.update('params', params);
@@ -66,3 +73,56 @@ const calculateBalance = (balance, quantity, precision, add) => (add
   : api.BigNumber(balance).minus(quantity).toFixed(precision));
 
 const countDecimals = value => api.BigNumber(value).dp();
+
+actions.tickUser = async (payload) => {
+  const {
+    account,
+    isSignedWithActiveKey,
+  } = payload;
+
+  // get contract params
+  const params = await api.db.findOne('params', {});
+
+  if (api.assert(isSignedWithActiveKey === true, 'you must use a custom_json signed with your active key')
+    && api.assert(account === undefined || (account && api.sender === params.authorizedTicker), 'not authorized to specify account parameter')
+    && api.assert(account === undefined || api.isValidAccountName(account), 'invalid account name')) {
+    const finalAccount = account ? account : api.sender;
+  }
+};
+
+actions.register = async (payload) => {
+  const {
+    isSignedWithActiveKey,
+  } = payload;
+
+  // get contract params
+  const params = await api.db.findOne('params', {});
+
+  if (api.assert(isSignedWithActiveKey === true, 'you must use a custom_json signed with your active key')) {
+    // check if this user is already registered
+    const user = await api.db.findOne('users', { account: api.sender });
+    if (api.assert(user === null, 'user already registered')) {
+      const blockDate = new Date(`${api.hiveBlockTimestamp}.000Z`);
+      const creationTimestamp = blockDate.getTime();
+
+      const newUser = {
+        account: api.sender,
+        isPremium: false,
+        isOnCooldown: false,
+        isEnabled: true,
+        markets: 0,
+        timeLimitBlocks: params.freeDurationBlocks,
+        lastTickBlock: 0,
+        creationTimestamp,
+      };
+
+      await api.db.insert('users', newUser);
+
+      api.emit('register', {
+        account: api.sender
+      });
+      return true;
+    }
+  }
+  return false;
+};
